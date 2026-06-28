@@ -19,10 +19,15 @@
 │   └── start.sh            # 生产环境启动脚本
 ├── src/
 │   ├── app/                # 页面路由与布局
-│   ├── components/ui/      # Shadcn UI 组件库
+│   ├── components/
+│   │   ├── ui/             # Shadcn UI 组件库
+│   │   ├── encrypt-panel.tsx  # 加密面板组件
+│   │   └── decrypt-panel.tsx  # 解密面板组件
 │   ├── hooks/              # 自定义 Hooks
 │   ├── lib/                # 工具库
-│   │   └── utils.ts        # 通用工具函数 (cn)
+│   │   ├── utils.ts        # 通用工具函数 (cn)
+│   │   ├── crypto.ts       # 双层 AES-GCM 加密核心模块
+│   │   └── disguise.ts     # 密文伪装编解码模块
 │   └── server.ts           # 自定义服务端入口
 ├── next.config.ts          # Next.js 配置
 ├── package.json            # 项目依赖管理
@@ -58,6 +63,23 @@
    1. 三方 CSS、字体等资源可在 `globals.css` 中顶部通过 `@import` 引入或使用 next/font
    2. preload, preconnect, dns-prefetch 通过 ReactDOM 的 preload、preconnect、dns-prefetch 方法引入
    3. json-ld 可阅读 https://nextjs.org/docs/app/guides/json-ld
+
+## 核心模块说明
+
+### 加密模块 (`src/lib/crypto.ts`)
+- 使用 Web Crypto API 实现双层 AES-256-GCM 加密
+- 密钥派生: PBKDF2-SHA256, 100,000 次迭代
+- 数据格式: `[MAGIC(4)][SALT1(16)][IV1(12)][SALT2(16)][IV2(12)][ENCRYPTED_DATA]`
+- 支持文本和文件加密，文件加密会附带元数据(JSON: name, type, size)
+
+### 伪装模块 (`src/lib/disguise.ts`)
+- 古典文书模式: 将二进制数据映射为 256 个精选汉字，输出看似文言文
+- 配置文件模式: 将数据编码为 Base64 后嵌入 INI 配置格式
+- 支持自动检测伪装类型
+
+### 前端组件
+- `encrypt-panel.tsx`: 加密面板 - 文本/文件输入、双层密码设置、伪装方式选择、结果输出
+- `decrypt-panel.tsx`: 解密面板 - 粘贴伪装内容、自动识别伪装类型、双层解密、文件下载/图片预览
 
 ## UI 设计与组件规范 (UI & Styling Standards)
 
