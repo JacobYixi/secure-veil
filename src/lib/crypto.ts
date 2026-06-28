@@ -246,3 +246,85 @@ export async function decryptFile(
     type: meta.type,
   };
 }
+
+// ============================================================
+// Auto-password & Self-contained payload
+// ============================================================
+
+/**
+ * Generate a random password with given length
+ * Uses characters that are easy to copy but hard to guess
+ */
+export function generatePassword(length: number = 16): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars[array[i] % chars.length];
+  }
+  return result;
+}
+
+/**
+ * Pack data with auto-generated passwords into a self-contained payload.
+ * Format: [P1_LEN(1)][P1][P2_LEN(1)][P2][ENCRYPTED_DATA]
+ * The passwords are embedded so the receiver doesn't need to know them.
+ */
+export async function selfContainedEncrypt(
+  data: ArrayBuffer,
+  isFile: boolean = false
+): Promise<{ payload: Uint8Array; password1: string; password2: string }> {
+  const password1 = generatePassword(16);
+  const password2 = generatePassword(16);
+
+  const encrypted = await doubleEncrypt(data, password1, password2);
+
+  // Pack passwords with encrypted data
+  const encoder = new TextEncoder();
+  const p1Bytes = encoder.encode(password1);
+  const p2Bytes = encoder.encode(password2);
+
+  // Format: [FLAG(1)][P1_LEN(1)][P1][P2_LEN(1)][P2][ENCRYPTED]
+  // FLAG: 0x01 = text, 0x02 = file
+  const flag = isFile ? 0x02 : 0x01;
+  const totalLen = 1 + 1 + p1Bytes.length + 1 + p2Bytes.length + encrypted.length;
+  const payload = new Uint8Array(totalLen);
+
+  let offset = 0;
+  payload[offset++] = flag;
+  payload[offset++] = p1Bytes.length;
+  payload.set(p1Bytes, offset); offset += p1Bytes.length;
+  payload[offset++] = p2Bytes.length;
+  payload.set(p2Bytes, offset); offset += p2Bytes.length;
+  payload.set(encrypted, offset);
+
+  return { payload, password1, password2 };
+}
+
+/**
+ * Decrypt a self-contained payload (passwords are embedded)
+ */
+export async function selfContainedDecrypt(
+  payload: Uint8Array
+): Promise<{ data: ArrayBuffer; isFile: boolean }> {
+  let offset = 0;
+
+  const flag = payload[offset++];
+  const isFile = flag === 0x02;
+
+  const p1Len = payload[offset++];
+  const decoder = new TextDecoder();
+  const password1 = decoder.decode(payload.slice(offset, offset + p1Len));
+  offset += p1Len;
+
+  const p2Len = payload[offset++];
+  const password2 = decoder.decode(payload.slice(offset, offset + p2Len));
+  offset += p2Len;
+
+  const encrypted = payload.slice(offset);
+
+  const data = await doubleDecrypt(encrypted, password1, password2);
+
+  return { data, isFile };
+}
