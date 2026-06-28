@@ -14,6 +14,12 @@ __pycache__/
 .env
 .cozeproj/reduction
 
+# Next.js static export
+out
+
+# Preview
+.preview
+
 # JS/TS bundlers & build outputs
 .next
 .nuxt
